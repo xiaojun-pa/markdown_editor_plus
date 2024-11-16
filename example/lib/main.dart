@@ -31,26 +31,35 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text("Home Screen"),
       ),
-      body: const Column(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          MarkdownAutoPreview(
-            decoration: InputDecoration(
-              hintText: 'Markdown Auto Preview',
-            ),
-            emojiConvert: true,
-            // maxLines: 10,
-            // minLines: 1,
-            // expands: true,
-          ),
-          SplittedMarkdownFormField(
-            markdownSyntax: '## Headline',
-            decoration: InputDecoration(
-              hintText: 'Splitted Markdown FormField',
-            ),
-            emojiConvert: true,
-          ),
-        ],
+      body: const Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16,),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            //   child: MarkdownAutoPreview(
+            //     decoration: InputDecoration(
+            //       hintText: 'Markdown Auto Preview',
+            //     ),
+            //     emojiConvert: true,
+            //     // maxLines: 10,
+            //     // minLines: 1,
+            //     // expands: true,
+            //   ),
+            // ),
+            Expanded(
+              flex: 1,
+              child: SplittedMarkdownFormFieldVertical(
+                minLines: 30,
+                markdownSyntax: '## Headline',
+                decoration: const InputDecoration(
+                  hintText: 'Input your job description here',
+                ),
+                //emojiConvert: true,
+              ),
+            )
+          ],
+        ),
       ),
     );
   }

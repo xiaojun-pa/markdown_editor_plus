@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-
+import 'package:markdown_editor_plus/src/toolbar.dart';
 import '../src/constants.dart';
 import '../src/emoji_input_formatter.dart';
-import '../src/toolbar.dart';
 import 'markdown_toolbar.dart';
 
-class MarkdownAutoPreview extends StatefulWidget {
-  const MarkdownAutoPreview({
+class SplittedMarkdownFormFieldVertical extends StatefulWidget {
+  const SplittedMarkdownFormFieldVertical({
     super.key,
     this.controller,
     this.scrollController,
@@ -20,16 +19,18 @@ class MarkdownAutoPreview extends StatefulWidget {
     this.expandableBackground,
     this.maxLines,
     this.minLines,
+    this.validator,
+    this.autovalidateMode,
+    this.onSaved,
     this.markdownSyntax,
+    this.readOnly = false,
+    this.expands = false,
     this.emojiConvert = false,
     this.enableToolBar = true,
     this.showEmojiSelection = true,
     this.autoCloseAfterSelectEmoji = true,
     this.textCapitalization = TextCapitalization.sentences,
-    this.readOnly = false,
-    this.expands = false,
     this.decoration = const InputDecoration(isDense: true),
-    this.hintText,
   });
 
   /// Markdown syntax to reset the field to
@@ -39,13 +40,17 @@ class MarkdownAutoPreview extends StatefulWidget {
   ///
   final String? markdownSyntax;
 
-  /// Hint text to show when the field is empty
-  final String? hintText;
-
   /// For enable toolbar options
   ///
   /// if false, toolbar widget will not display
   final bool enableToolBar;
+
+  /// Whether the text can be changed.
+  ///
+  /// When this is set to true, the text cannot be modified by any shortcut or keyboard operation. The text is still selectable.
+  ///
+  /// Defaults to false. Must not be null.
+  final bool readOnly;
 
   /// Enable Emoji options
   ///
@@ -111,13 +116,6 @@ class MarkdownAutoPreview extends StatefulWidget {
   /// the modal will not disappear after you select the emoji
   final bool autoCloseAfterSelectEmoji;
 
-  /// Whether the text can be changed.
-  ///
-  /// When this is set to true, the text cannot be modified by any shortcut or keyboard operation. The text is still selectable.
-  ///
-  /// Defaults to false. Must not be null.
-  final bool readOnly;
-
   /// The color of the cursor.
   ///
   /// The cursor indicates the current location of text insertion point in the field.
@@ -132,16 +130,12 @@ class MarkdownAutoPreview extends StatefulWidget {
   ///
   /// When no toolbarBackground widget is provided, the default toolbar color will be displayed
   /// which has grey[200] color
-  ///
-  ///
   final Color? toolbarBackground;
 
   /// The toolbar widget to display when the toolbar is enabled
   ///
   /// When no toolbarBackground widget is provided, the default toolbar color will be displayed
   /// which has white color
-  ///
-  ///
   final Color? expandableBackground;
 
   /// Customise the decoration of this text field
@@ -181,22 +175,40 @@ class MarkdownAutoPreview extends StatefulWidget {
   /// Defaults to false.
   final bool expands;
 
+  /// Creates a [FormField] that contains a [TextField].
+  ///
+  /// When a [controller] is specified, [initialValue] must be null (the default). If [controller] is null, then a [TextEditingController] will be constructed automatically and its text will be initialized to [initialValue] or the empty string.
+  ///
+  /// For documentation about the various parameters, see the [TextField] class and [TextField.new], the constructor.
+  final String? Function(String?)? validator;
+
+  ///Creates a [FormField] that contains a [TextField].
+  ///
+  /// When a [controller] is specified, [initialValue] must be null (the default). If [controller] is null, then a [TextEditingController] will be constructed automatically and its text will be initialized to [initialValue] or the empty string.
+  ///
+  /// For documentation about the various parameters, see the [TextField] class and [TextField.new], the constructor.
+  final AutovalidateMode? autovalidateMode;
+
+  /// Creates a [FormField] that contains a [TextField].
+  ///
+  /// When a [controller] is specified, [initialValue] must be null (the default). If [controller] is null, then a [TextEditingController] will be constructed automatically and its text will be initialized to [initialValue] or the empty string.
+  ///
+  /// For documentation about the various parameters, see the [TextField] class and [TextField.new], the constructor.
+  final void Function(String?)? onSaved;
+
   @override
-  State<MarkdownAutoPreview> createState() => _MarkdownAutoPreviewState();
+  State<SplittedMarkdownFormFieldVertical> createState() =>
+      _SplittedMarkdownFormFieldVerticalState();
 }
 
-class _MarkdownAutoPreviewState extends State<MarkdownAutoPreview> {
+class _SplittedMarkdownFormFieldVerticalState extends State<SplittedMarkdownFormFieldVertical> {
   // Internal parameter
   late TextEditingController _internalController;
-
-  final FocusScopeNode _internalFocus =
-      FocusScopeNode(debugLabel: '_internalFocus');
-  final FocusNode _textFieldFocusNode =
-      FocusNode(debugLabel: '_textFieldFocusNode');
-
+  final FocusNode _focusNode = FocusNode();
   late Toolbar _toolbar;
-
-  bool _focused = false;
+  bool showPreview = true;
+  final ScrollController _inputScroller = ScrollController();
+  final ScrollController _previewScroller = ScrollController();
 
   @override
   void initState() {
@@ -205,17 +217,25 @@ class _MarkdownAutoPreviewState extends State<MarkdownAutoPreview> {
     _toolbar = Toolbar(
       controller: _internalController,
       bringEditorToFocus: () {
-        if (!_textFieldFocusNode.hasFocus) {
-          setState(() {
-            _focused = true;
-          });
-
-          _textFieldFocusNode.requestFocus();
-        }
+        _focusNode.requestFocus();
       },
     );
-
+    _inputScroller.addListener(onTextFieldScrolled);
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _inputScroller.dispose();
+    _previewScroller.dispose();
+    super.dispose();
+  }
+
+  void onTextFieldScrolled() {
+      var offset = _inputScroller.offset;
+      var previewOffset = offset * _previewScroller.position.maxScrollExtent/_inputScroller.position.maxScrollExtent;
+      //print("scroll ${offset}  ${_inputScroller.position.maxScrollExtent} ${_previewScroller.position.maxScrollExtent}");
+      _previewScroller.animateTo(previewOffset, duration: const Duration(milliseconds: 50), curve: Curves.bounceIn);
   }
 
   @override
@@ -233,7 +253,7 @@ class _MarkdownAutoPreviewState extends State<MarkdownAutoPreview> {
             _toolbar.action("**", "**");
 
             // onActionCompleted
-            // setState(() {});
+            setState(() {});
             return null;
           },
         ),
@@ -242,102 +262,91 @@ class _MarkdownAutoPreviewState extends State<MarkdownAutoPreview> {
             _toolbar.action("_", "_");
 
             // onActionCompleted
-            // setState(() {});
+            setState(() {});
             return null;
           },
         ),
       },
-
-      onFocusChange: (focus) {
-        setState(() {
-          _focused = focus;
-        });
-
-        if (_focused) _internalFocus.requestFocus(_textFieldFocusNode);
-      },
-      // canRequestFocus: false,
-      focusNode: _internalFocus,
-      child: _focused
-          ? _editorOnFocused()
-          : GestureDetector(
-              onTap: () {
-                // Bring widget in widget tree first
-                setState(() {
-                  _focused = true;
-                });
-
-                // Then request for focus when widget is built
-                _textFieldFocusNode.requestFocus();
-              },
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: MarkdownBody(
-                  key: const ValueKey<String>("zmarkdown-parse-body"),
-                  data: _internalController.text == ""
-                      ? widget.hintText ?? "_Markdown text_"
-                      : _internalController.text,
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _editorOnFocused() {
-    return !widget.enableToolBar
-        ? _editor()
-        : Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _editor(),
-
-              // show toolbar
-              if (true || !widget.readOnly)
+              if (widget.enableToolBar)
                 MarkdownToolbar(
                   markdownSyntax: widget.markdownSyntax,
+                  showPreviewButton: true,
+                  onPreviewChanged: () {
+                    setState(() {
+                      showPreview = !showPreview;
+                    });
+                  },
                   // key: const ValueKey<String>("zmarkdowntoolbar"),
                   controller: _internalController,
                   autoCloseAfterSelectEmoji: widget.autoCloseAfterSelectEmoji,
-                  toolbar: _toolbar,
-                  onPreviewChanged: () {
-                    // Remove focus first
-                    _internalFocus.unfocus();
-
-                    // Then remove widget from widget tree
-                    setState(() {
-                      _focused = !_focused;
-                    });
-                  },
-                  unfocus: () {
-                    _internalFocus.unfocus();
-                  },
-                  showEmojiSelection: widget.showEmojiSelection,
                   emojiConvert: widget.emojiConvert,
                   toolbarBackground: widget.toolbarBackground,
                   expandableBackground: widget.expandableBackground,
-                )
+                  toolbar: _toolbar,
+                  onActionCompleted: () {
+                    setState(() {});
+                  },
+                  showEmojiSelection: widget.showEmojiSelection,
+                ),
+              Expanded(
+                flex: 6,
+                child: TextFormField(
+                  readOnly: widget.readOnly,
+                  controller: _internalController,
+                  cursorColor: widget.cursorColor,
+                  focusNode: _focusNode,
+                  inputFormatters: [
+                    if (widget.emojiConvert) EmojiInputFormatter(),
+                  ],
+                  onChanged: (value) {
+                    setState(() {});
+                    widget.onChanged?.call(value);
+                  },
+                  onTap: widget.onTap,
+                  scrollController: widget.scrollController ?? _inputScroller,
+                  style: widget.style,
+                  textCapitalization: widget.textCapitalization,
+                  maxLines: widget.maxLines,
+                  minLines: widget.minLines,
+                  expands: widget.expands,
+                  decoration: widget.decoration,
+                  validator: widget.validator,
+                  autovalidateMode: widget.autovalidateMode,
+                  onSaved: widget.onSaved
+                ),
+              ),
+              // Some padding
+              const SizedBox(height: 8.0),
+              if (showPreview)
+                Expanded(
+                  flex: 4,
+                  child: SingleChildScrollView(
+                    controller: _previewScroller,
+                    child: MarkdownBody(
+                      // key: const ValueKey<String>("zmarkdown-parse-body"),
+                      data: _internalController.text == ""
+                          ? "Preview goes here"
+                          : _internalController.text,
+                      fitContent: false,
+                      styleSheet: MarkdownStyleSheet(
+                        textAlign: WrapAlignment.start,
+                      ),
+                      selectable: true,
+                    ),
+                  ),
+                ),
+
             ],
           );
-  }
-
-  Widget _editor() {
-    return TextField(
-      controller: _internalController,
-      focusNode: _textFieldFocusNode,
-      cursorColor: widget.cursorColor,
-      inputFormatters: [
-        if (widget.emojiConvert) EmojiInputFormatter(),
-      ],
-      onChanged: widget.onChanged,
-      onTap: widget.onTap,
-      readOnly: widget.readOnly,
-      scrollController: widget.scrollController,
-      style: widget.style,
-      textCapitalization: widget.textCapitalization,
-      maxLines: widget.maxLines,
-      minLines: widget.minLines,
-      expands: widget.expands,
-      decoration: widget.decoration,
+        },
+      ),
     );
   }
 }
